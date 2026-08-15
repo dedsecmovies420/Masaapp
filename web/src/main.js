@@ -26,6 +26,36 @@ let ringtoneTimer = null;
 let audioCtx = null;
 let notificationRegistration = null;
 
+
+async function fingerprintFromPublicKey(publicKey) {
+  try {
+    const raw = await crypto.subtle.exportKey("raw", publicKey);
+    const digest = await crypto.subtle.digest("SHA-256", raw);
+    const hex = Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, "0")).join("").toUpperCase();
+    return hex.match(/.{1,4}/g)?.join(" ") || hex;
+  } catch { return "Unavailable"; }
+}
+async function updateE2EEVerificationUI() {
+  const statusEl = document.querySelector("#e2eeStatus");
+  const mineEl = document.querySelector("#myFingerprint");
+  const peerEl = document.querySelector("#peerFingerprint");
+  if (!statusEl || !mineEl || !peerEl) return;
+  try {
+    const myFp = state.ecdh?.publicKey ? await fingerprintFromPublicKey(state.ecdh.publicKey) : "Unavailable";
+    const peerKey = state.peerPublicKey || state.peerKey || null;
+    mineEl.textContent = myFp;
+    peerEl.textContent = peerKey ? await fingerprintFromPublicKey(peerKey) : "Not available";
+    statusEl.textContent = peerKey ? "🔒 E2EE key established" : "⚠️ Peer key not established";
+  } catch { statusEl.textContent = "⚠️ E2EE status unavailable"; }
+  document.querySelector("#copyMyFingerprint")?.addEventListener("click", () => navigator.clipboard?.writeText(mineEl.textContent), {once:true});
+  document.querySelector("#copyPeerFingerprint")?.addEventListener("click", () => navigator.clipboard?.writeText(peerEl.textContent), {once:true});
+  document.querySelector("#verifyFingerprint")?.addEventListener("click", () => {
+    const fp = peerEl.textContent;
+    if (!fp || fp === "Not available" || fp === "Unavailable") return alert("Connect to the peer first.");
+    alert("Verify this fingerprint with your peer through a separate trusted channel:\\n\\n" + fp);
+  }, {once:true});
+}
+
 function applyTheme() {
   document.documentElement.dataset.theme = state.theme;
   const meta = document.querySelector('meta[name="theme-color"]');

@@ -61,3 +61,5 @@ dialog label{display:block;margin:14px 0}.row{display:flex!important;gap:8px;ali
 }
 
 .fingerprint{font-family:ui-monospace,monospace;font-size:10px;word-break:break-word;margin-top:6px;opacity:.75}.privacy b{font-size:12px}
+
+.e2ee-panel{margin:14px 0;padding:14px;border:1px solid rgba(120,140,160,.35);border-radius:12px}.e2ee-panel code{display:block;word-break:break-all;margin:5px 0 8px;font-size:.8rem}.fingerprint-row{margin:10px 0}.e2ee-panel small{display:block;opacity:.75;margin-top:8px;line-height:1.4}
