@@ -233,32 +233,87 @@ function drawMessages() {
 function historyKey() {
   if (!state.me || !state.peer) return "";
   const ids = [state.me.trim(), state.peer.trim()].sort();
-  return `cocoon_history_v1:${ids[0]}::${ids[1]}`;
+  return `cocoon_history_e2ee_v1:${ids[0]}::${ids[1]}`;
 }
 
-function loadMessageHistory() {
+async function saveMessageHistory() {
   const key = historyKey();
-  if (!key) {
+  if (!key || !state.e2ee.aesKey) return;
+
+  try {
+    const encryptedHistory = [];
+
+    for (const message of state.messages) {
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+
+      const plaintext = JSON.stringify({
+        from: message.from,
+        text: message.text
+      });
+
+      const encrypted = await crypto.subtle.encrypt(
+        { name: "AES-GCM", iv },
+        state.e2ee.aesKey,
+        new TextEncoder().encode(plaintext)
+      );
+
+      encryptedHistory.push({
+        iv: b64FromBytes(iv),
+        data: b64FromBytes(new Uint8Array(encrypted))
+      });
+    }
+
+    localStorage.setItem(key, JSON.stringify(encryptedHistory));
+  } catch (err) {
+    console.warn("Could not save encrypted history:", err);
+  }
+}
+
+async function loadMessageHistory() {
+  const key = historyKey();
+
+  if (!key || !state.e2ee.aesKey) {
     state.messages = [];
     return;
   }
 
   try {
     const saved = JSON.parse(localStorage.getItem(key) || "[]");
-    state.messages = Array.isArray(saved) ? saved : [];
+
+    if (!Array.isArray(saved)) {
+      state.messages = [];
+      return;
+    }
+
+    const restored = [];
+
+    for (const item of saved) {
+      try {
+        const iv = bytesFromB64(item.iv);
+        const data = bytesFromB64(item.data);
+
+        const decrypted = await crypto.subtle.decrypt(
+          { name: "AES-GCM", iv },
+          state.e2ee.aesKey,
+          data
+        );
+
+        const message = JSON.parse(
+          new TextDecoder().decode(decrypted)
+        );
+
+        if (message?.from && typeof message.text === "string") {
+          restored.push(message);
+        }
+      } catch {
+        // Ignore history entries that cannot be decrypted.
+      }
+    }
+
+    state.messages = restored;
+    drawMessages();
   } catch {
     state.messages = [];
-  }
-}
-
-function saveMessageHistory() {
-  const key = historyKey();
-  if (!key) return;
-
-  try {
-    localStorage.setItem(key, JSON.stringify(state.messages));
-  } catch (err) {
-    console.warn("Could not save message history:", err);
   }
 }
 
@@ -379,6 +434,7 @@ async function establishPeerKey(jwk) {
     );
     state.e2ee.peerPublicJwk = jwk;
     state.e2ee.fingerprint = await fingerprintJwk(jwk);
+    await loadMessageHistory();
     const fp = document.querySelector("#fingerprint"), st = document.querySelector("#e2eeStatus");
     if (fp) fp.textContent = `Peer key fingerprint: ${state.e2ee.fingerprint}`;
     if (st) st.textContent = "Established";
@@ -409,10 +465,6 @@ async function decryptE2EE(ciphertext, iv64) {
 async function connect() {
   resetIdleTimer();
   if (!state.me || !state.peer) return alert("Enter both IDs.");
-  
-loadMessageHistory();
-drawMessages();
-
   try { await ensureE2EEIdentity(); } catch (e) { return alert(e.message); }
   localStorage.setItem("cocoon_user", state.me);
   if (state.socket) state.socket.disconnect();
