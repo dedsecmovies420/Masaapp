@@ -1,26 +1,30 @@
 # Cocoon Private Messenger
 
-A GitHub-ready starter for a private 1-to-1 messenger.
+An editable 1-to-1 messenger starter with Socket.IO signalling, client-side AES-GCM transport encryption, PIN lock, themes, and a WebRTC voice/video call path.
 
-## What is implemented
+## Current implementation
+- 1-to-1 real-time chat through Socket.IO
+- Client-side AES-GCM message encryption for the demo transport
+- App Lock with PBKDF2-based PIN verifier, manual lock, 5-minute inactivity lock, and lock-on-hidden
+- Light/dark/system theme with persistence and system-theme detection
+- Message and call sounds with an enable/disable control
+- Browser notifications with privacy-preserving message previews disabled by default
+- Service-worker notification click handling
+- Incoming-call UI
+- WebRTC voice/video media path using STUN signalling
+- Call accept/reject/end
+- The Node server relays signalling and ciphertext; it does not intentionally store chat plaintext
 
-- 1-to-1 chat UI
-- Real-time transport through Socket.IO
-- Client-side AES-GCM message encryption for the transport payload
-- App PIN lock with PBKDF2-derived verifier
-- Auto-lock when the page is hidden
-- Light/dark/system theme
-- Notification sound toggle
-- Call UI placeholders and call-event signalling hooks
-- No message plaintext is intentionally stored by the demo server
+## App Lock and notification notes
+- App Lock is a web-app privacy barrier. It is not equivalent to Android Keystore/biometric protection.
+- The lock disconnects the Socket.IO session and ends an active call when it engages.
+- Notification message previews are disabled by default; enabling them can expose message text to the operating system notification surface.
+- Browser notification delivery is subject to browser/OS permission, background execution, and power-management rules. This starter does not implement Web Push or a native Android notification service.
 
 ## Important security limitation
+This is **not a production-secure or anonymous messenger**. The demo chat key is derived from the two visible IDs and is not an authenticated E2EE key exchange. The PIN is a UI/local verifier, not a substitute for secure Android keystore-backed protection. WebRTC signalling is not identity-authenticated and the example uses a public STUN server only.
 
-This repository is a **development starter, not a production-secure messenger**.
-
-For production E2EE, authenticated key exchange, identity verification, multi-device key management, secure push notifications, WebRTC TURN/STUN configuration, abuse protection, and an independent security audit are still required.
-
-Do not claim that this app is "unbreakable" or "100% private".
+Before calling this private/secure for real use, replace the demo cryptography with an audited E2EE protocol, authenticated identity/key verification, secure local key storage, replay protection, device/session management, authenticated TURN credentials, push notification hardening, rate limits, and an independent security review.
 
 ## Run
 
@@ -38,20 +42,7 @@ npm install
 npm start
 ```
 
-The web app expects the Socket.IO server at `http://localhost:8787`.
+Set `VITE_SOCKET_URL` to the HTTPS/WSS-compatible Socket.IO server URL before building the web app.
 
-## GitHub Pages
-
-GitHub Pages can host the `web` frontend, but it cannot run the Node server.
-Deploy the `server` separately on a Node-compatible host and set:
-
-`VITE_SOCKET_URL=https://YOUR-SERVER-DOMAIN`
-
-before building the web app.
-
-## Android 4.3–14
-
-The web/PWA layer can be wrapped in an Android shell, but Android 4.3 is legacy.
-Modern privacy features such as current biometric APIs, notification behaviour, TLS defaults,
-and WebRTC support are not equivalent across Android 4.3–14. For a security-sensitive release,
-a higher minimum Android version is strongly recommended.
+## Android
+A web wrapper does not make every Android version equally capable. Android 4.3-era WebViews do not provide the same WebRTC, TLS, notification, storage, or cryptographic APIs as modern Android. A security-sensitive release should set a supported minimum version after compatibility/security testing rather than promising Android 4.3–14 equivalence.
