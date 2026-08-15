@@ -373,7 +373,7 @@ async function decryptE2EE(ciphertext, iv64) {
   return new TextDecoder().decode(plain);
 }
 
-function connect() {
+async function connect() {
   resetIdleTimer();
   if (!state.me || !state.peer) return alert("Enter both IDs.");
   try { await ensureE2EEIdentity(); } catch (e) { return alert(e.message); }
