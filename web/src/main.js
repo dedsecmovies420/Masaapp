@@ -230,6 +230,39 @@ function drawMessages() {
   box.scrollTop = box.scrollHeight;
 }
 
+function historyKey() {
+  if (!state.me || !state.peer) return "";
+  const ids = [state.me.trim(), state.peer.trim()].sort();
+  return `cocoon_history_v1:${ids[0]}::${ids[1]}`;
+}
+
+function loadMessageHistory() {
+  const key = historyKey();
+  if (!key) {
+    state.messages = [];
+    return;
+  }
+
+  try {
+    const saved = JSON.parse(localStorage.getItem(key) || "[]");
+    state.messages = Array.isArray(saved) ? saved : [];
+  } catch {
+    state.messages = [];
+  }
+}
+
+function saveMessageHistory() {
+  const key = historyKey();
+  if (!key) return;
+
+  try {
+    localStorage.setItem(key, JSON.stringify(state.messages));
+  } catch (err) {
+    console.warn("Could not save message history:", err);
+  }
+}
+
+
 async function derivePinVerifier(pin, saltB64) {
   const salt = saltB64 ? Uint8Array.from(atob(saltB64), c => c.charCodeAt(0)) : crypto.getRandomValues(new Uint8Array(16));
   if (crypto.subtle?.deriveBits) {
@@ -376,6 +409,10 @@ async function decryptE2EE(ciphertext, iv64) {
 async function connect() {
   resetIdleTimer();
   if (!state.me || !state.peer) return alert("Enter both IDs.");
+  
+loadMessageHistory();
+drawMessages();
+
   try { await ensureE2EEIdentity(); } catch (e) { return alert(e.message); }
   localStorage.setItem("cocoon_user", state.me);
   if (state.socket) state.socket.disconnect();
@@ -393,6 +430,7 @@ async function connect() {
       if (packet.senderKey && !state.e2ee.aesKey) await establishPeerKey(packet.senderKey);
       const text = await decrypt(packet.ciphertext, packet.iv, state.me);
       state.messages.push({from:packet.from, text});
+      saveMessageHistory();
       drawMessages();
       if (state.sound) beep();
       if (state.notifications) notifyUser("New message", text);
@@ -434,7 +472,10 @@ async function send(e) {
   if (!text) return;
   const enc=await encrypt(text,state.me,state.peer);
   state.socket.emit("message",{to:state.peer,...enc});
-  state.messages.push({from:state.me,text}); input.value=""; drawMessages();
+  state.messages.push({from:state.me,text});
+saveMessageHistory();
+input.value="";
+drawMessages();
 }
 
 async function startCall(kind) {
