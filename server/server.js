@@ -17,6 +17,7 @@ const io = new Server(httpServer, {
 });
 
 const online = new Map();
+const publicKeys = new Map();
 const USER_RE = /^[A-Za-z0-9_.-]{1,64}$/;
 const buckets = new Map();
 const WINDOW_MS = 10_000;
@@ -45,6 +46,26 @@ io.on("connection", socket => {
     if (previous && previous !== socket.id) io.to(previous).emit("session-replaced");
     online.set(user, socket.id);
     socket.data.user = user;
+  });
+
+
+  socket.on("key-publish", packet => {
+    if (!allow(socket) || !socket.data.user) return;
+    if (!packet?.publicKey || typeof packet.publicKey !== "object") return;
+    publicKeys.set(socket.data.user, packet.publicKey);
+    const to = String(packet.to || "").trim();
+    if (to && validUser(to)) {
+      const target = targetSocket(to);
+      if (target) io.to(target).emit("key", { from: socket.data.user, publicKey: packet.publicKey });
+    }
+  });
+
+  socket.on("key-request", packet => {
+    if (!allow(socket) || !socket.data.user) return;
+    const to = String(packet?.to || "").trim();
+    if (!validUser(to)) return;
+    const key = publicKeys.get(to);
+    if (key) socket.emit("key", { from: to, publicKey: key });
   });
 
   socket.on("message", packet => {
@@ -94,6 +115,7 @@ io.on("connection", socket => {
 
   socket.on("disconnect", () => {
     buckets.delete(socket.id);
+    if (socket.data.user) publicKeys.delete(socket.data.user);
     if (socket.data.user && online.get(socket.data.user) === socket.id) online.delete(socket.data.user);
   });
 });
